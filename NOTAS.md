@@ -6,3 +6,7 @@ implementando una validación matemática estricta para el RUT chileno en el end
 
 Nacho: Creé el userController.js instalando bcryptjs para encriptar el password_hash por seguridad, resolviendo la vulnerabilidad 
 de texto plano. Endpoints CRUD listos.
+
+Nacho: Finalizado el frontend. Actualicé la vista de Clientes agregando el modal para el futuro historial de compras. 
+Corregí y adapté la vista de Usuarios asegurando que la edición de roles funcione correctamente con el backend y ocultando 
+la edición de contraseñas por seguridad.
