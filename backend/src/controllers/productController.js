@@ -16,7 +16,8 @@ const getAll = async (req, res) => {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (p.nombre ILIKE $${params.length} OR p.descripcion ILIKE $${params.length})`;
+      // Actualizado para que también busque por código de barras
+      query += ` AND (p.nombre ILIKE $${params.length} OR p.descripcion ILIKE $${params.length} OR p.codigo_barra ILIKE $${params.length})`;
     }
     if (categoria_id) {
       params.push(Number(categoria_id));
@@ -49,14 +50,26 @@ const getById = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { nombre, descripcion, precio, stock, categoria_id } = req.body;
-    // TODO: Validar que precio >= 0, stock >= 0, nombre no vacío, categoria_id exista
+    // Extraemos los 3 nuevos campos del req.body
+    const { nombre, descripcion, precio, stock, categoria_id, codigo_barra, precio_compra, stock_minimo } = req.body;
+    // Validar que precio >= 0, stock >= 0, nombre no vacío, categoria_id exista
     const imagen_url = req.file ? `/uploads/${req.file.filename}` : null;
 
+    // Modificado para insertar en las 9 columnas de la base de datos
     const result = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, precio, stock, categoria_id, imagen_url)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [nombre, descripcion || null, Number(precio), Number(stock) || 0, categoria_id || null, imagen_url]
+      `INSERT INTO productos (nombre, descripcion, precio, stock, categoria_id, imagen_url, codigo_barra, precio_compra, stock_minimo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        nombre, 
+        descripcion || null, 
+        Number(precio), 
+        Number(stock) || 0, 
+        categoria_id || null, 
+        imagen_url,
+        codigo_barra || null,
+        Number(precio_compra) || 0,
+        Number(stock_minimo) || 0
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -67,19 +80,25 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, precio, stock, categoria_id, activo } = req.body;
+    // Añadimos los 3 nuevos campos en la desestructuración de la petición
+    const { nombre, descripcion, precio, stock, categoria_id, activo, codigo_barra, precio_compra, stock_minimo } = req.body;
     const imagen_url = req.file ? `/uploads/${req.file.filename}` : undefined;
 
     const fields = [];
     const values = [];
 
-    if (nombre      !== undefined) { fields.push(`nombre = $${fields.length + 1}`);       values.push(nombre); }
-    if (descripcion !== undefined) { fields.push(`descripcion = $${fields.length + 1}`);  values.push(descripcion); }
-    if (precio      !== undefined) { fields.push(`precio = $${fields.length + 1}`);       values.push(Number(precio)); }
-    if (stock       !== undefined) { fields.push(`stock = $${fields.length + 1}`);        values.push(Number(stock)); }
-    if (categoria_id !== undefined){ fields.push(`categoria_id = $${fields.length + 1}`); values.push(categoria_id); }
-    if (activo      !== undefined) { fields.push(`activo = $${fields.length + 1}`);       values.push(activo); }
-    if (imagen_url  !== undefined) { fields.push(`imagen_url = $${fields.length + 1}`);   values.push(imagen_url); }
+    if (nombre          !== undefined) { fields.push(`nombre = $${fields.length + 1}`);        values.push(nombre); }
+    if (descripcion     !== undefined) { fields.push(`descripcion = $${fields.length + 1}`);   values.push(descripcion); }
+    if (precio          !== undefined) { fields.push(`precio = $${fields.length + 1}`);        values.push(Number(precio)); }
+    if (stock           !== undefined) { fields.push(`stock = $${fields.length + 1}`);         values.push(Number(stock)); }
+    if (categoria_id    !== undefined) { fields.push(`categoria_id = $${fields.length + 1}`);  values.push(categoria_id); }
+    if (activo          !== undefined) { fields.push(`activo = $${fields.length + 1}`);        values.push(activo); }
+    if (imagen_url      !== undefined) { fields.push(`imagen_url = $${fields.length + 1}`);    values.push(imagen_url); }
+    
+    // Control dinámico para los 3 campos nuevos
+    if (codigo_barra    !== undefined) { fields.push(`codigo_barra = $${fields.length + 1}`);  values.push(codigo_barra); }
+    if (precio_compra   !== undefined) { fields.push(`precio_compra = $${fields.length + 1}`); values.push(Number(precio_compra)); }
+    if (stock_minimo    !== undefined) { fields.push(`stock_minimo = $${fields.length + 1}`);  values.push(Number(stock_minimo)); }
 
     if (!fields.length) return res.status(400).json({ error: 'No hay campos para actualizar.' });
 
