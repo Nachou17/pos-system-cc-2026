@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 
-const EMPTY = { nombre: '', email: '', password: '', rol_id: '2' };
+const EMPTY = { nombre: '', email: '', password: '', rol_id: 2 }; // 2 = cajero por defecto
 
 export default function UsersPage() {
   const [users, setUsers]   = useState([]);
@@ -16,8 +16,11 @@ export default function UsersPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setForm(EMPTY); setModal('create'); };
-  const openEdit   = (u) => {
-    setForm({ nombre: u.nombre, email: u.email, password: '', rol_id: String(u.rol_id) });
+  
+  const openEdit = (u) => {
+    // CORRECCIÓN: Convertimos el texto del rol que viene del backend de vuelta a su ID
+    const rolIdAsignado = u.rol === 'admin' ? 1 : 2;
+    setForm({ nombre: u.nombre, email: u.email, password: '', rol_id: rolIdAsignado });
     setModal(u);
   };
 
@@ -25,10 +28,17 @@ export default function UsersPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form };
-      if (!payload.password) delete payload.password;
-      if (modal === 'create') await api.post('/users', payload);
-      else await api.put(`/users/${modal.id}`, payload);
+      // Aseguramos que el rol_id se envíe como número (Integer) a PostgreSQL
+      const payload = { ...form, rol_id: parseInt(form.rol_id, 10) };
+      
+      if (modal === 'create') {
+        await api.post('/users', payload);
+      } else {
+        // En edición, no enviamos la contraseña
+        delete payload.password; 
+        await api.put(`/users/${modal.id}`, payload);
+      }
+      
       setModal(null);
       load();
     } catch (err) {
@@ -71,7 +81,7 @@ export default function UsersPage() {
                 <td className="table-cell font-medium">{u.nombre}</td>
                 <td className="table-cell text-gray-500">{u.email}</td>
                 <td className="table-cell">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase ${u.rol === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                     {u.rol}
                   </span>
                 </td>
@@ -82,8 +92,8 @@ export default function UsersPage() {
                 </td>
                 <td className="table-cell">
                   <div className="flex gap-2">
-                    <button onClick={() => openEdit(u)} className="text-indigo-600 hover:underline text-sm">Editar</button>
-                    <button onClick={() => handleDelete(u.id)} className="text-red-500 hover:underline text-sm">Eliminar</button>
+                    <button onClick={() => openEdit(u)} className="text-indigo-600 hover:underline text-sm font-semibold">Editar</button>
+                    <button onClick={() => handleDelete(u.id)} className="text-red-500 hover:underline text-sm font-semibold">Desactivar</button>
                   </div>
                 </td>
               </tr>
@@ -107,23 +117,26 @@ export default function UsersPage() {
                 <input required type="email" className="input" value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contraseña {modal !== 'create' && '(dejar vacío para no cambiar)'}
-                </label>
-                <input type="password" className="input" required={modal === 'create'}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              </div>
+              
+              {/* CORRECCIÓN: Solo se pide contraseña al crear, no al editar */}
+              {modal === 'create' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña *</label>
+                  <input type="password" className="input" required
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
                 <select className="input" value={form.rol_id}
-                  onChange={(e) => setForm({ ...form, rol_id: e.target.value })}>
-                  <option value="1">Administrador</option>
-                  <option value="2">Cajero</option>
+                  onChange={(e) => setForm({ ...form, rol_id: parseInt(e.target.value, 10) })}>
+                  <option value={1}>Administrador</option>
+                  <option value={2}>Cajero</option>
                 </select>
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-4">
                 <button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Guardando...' : 'Guardar'}</button>
                 <button type="button" onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               </div>

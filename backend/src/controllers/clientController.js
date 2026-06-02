@@ -1,5 +1,21 @@
 const pool = require('../config/database');
 
+// Función auxiliar para validar el RUT Chileno matemáticamente
+const isValidRut = (rut) => {
+  if (!/^[0-9]+-[0-9kK]{1}$/.test(rut)) return false;
+  
+  const [numero, dv] = rut.split('-');
+  let m = 0, s = 1;
+  let n = parseInt(numero, 10);
+  
+  for (; n; n = Math.floor(n / 10)) {
+    s = (s + (n % 10) * (9 - m++ % 6)) % 11;
+  }
+  
+  const dvCalculado = s ? String(s - 1) : 'k';
+  return dvCalculado.toLowerCase() === dv.toLowerCase();
+};
+
 const getAll = async (req, res) => {
   try {
     const { search } = req.query;
@@ -32,8 +48,15 @@ const getById = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { rut, nombre, email, telefono, direccion } = req.body;
-    // TODO: Validar formato de RUT chileno (dígito verificador)
-    if (!rut || !nombre) return res.status(400).json({ error: 'RUT y nombre son requeridos.' });
+    
+    if (!rut || !nombre) {
+      return res.status(400).json({ error: 'RUT y nombre son requeridos.' });
+    }
+
+    // Aplicamos la validación del RUT
+    if (!isValidRut(rut)) {
+      return res.status(400).json({ error: 'El formato o dígito verificador del RUT es inválido. Use formato 12345678-9' });
+    }
 
     const result = await pool.query(
       `INSERT INTO clientes (rut, nombre, email, telefono, direccion)

@@ -7,7 +7,8 @@ const EMPTY = { rut: '', nombre: '', email: '', telefono: '', direccion: '' };
 export default function ClientsPage() {
   const [clients, setClients] = useState([]);
   const [search, setSearch]   = useState('');
-  const [modal, setModal]     = useState(null);
+  const [modal, setModal]     = useState(null); // 'create' | cliente_obj
+  const [historyModal, setHistoryModal] = useState(null); // cliente_obj
   const [form, setForm]       = useState(EMPTY);
   const [saving, setSaving]   = useState(false);
 
@@ -19,8 +20,15 @@ export default function ClientsPage() {
   useEffect(() => { load(); }, [load]);
 
   const openCreate = () => { setForm(EMPTY); setModal('create'); };
-  const openEdit   = (c) => {
-    setForm({ rut: c.rut, nombre: c.nombre, email: c.email || '', telefono: c.telefono || '', direccion: c.direccion || '' });
+  
+  const openEdit = (c) => {
+    setForm({ 
+      rut: c.rut, 
+      nombre: c.nombre, 
+      email: c.email || '', 
+      telefono: c.telefono || '', 
+      direccion: c.direccion || '' 
+    });
     setModal(c);
   };
 
@@ -84,9 +92,10 @@ export default function ClientsPage() {
                 <td className="table-cell text-gray-500">{c.email || '—'}</td>
                 <td className="table-cell text-gray-500">{c.telefono || '—'}</td>
                 <td className="table-cell">
-                  <div className="flex gap-2">
-                    <button onClick={() => openEdit(c)} className="text-indigo-600 hover:underline text-sm">Editar</button>
-                    <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:underline text-sm">Eliminar</button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setHistoryModal(c)} className="text-green-600 hover:underline text-sm font-semibold">Historial</button>
+                    <button onClick={() => openEdit(c)} className="text-indigo-600 hover:underline text-sm font-semibold">Editar</button>
+                    <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:underline text-sm font-semibold">Eliminar</button>
                   </div>
                 </td>
               </tr>
@@ -95,6 +104,7 @@ export default function ClientsPage() {
         </table>
       </div>
 
+      {/* Modal de Creación / Edición */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -136,6 +146,49 @@ export default function ClientsPage() {
                 <button type="button" onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Historial de Compras (Preparado para la fase de Ventas) */}
+      {historyModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Historial de Compras</h2>
+              <button onClick={() => setHistoryModal(null)} className="text-gray-500 hover:text-black font-bold text-xl">&times;</button>
+            </div>
+            
+            <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+              <p className="text-sm text-blue-800">Cliente: <span className="font-bold">{historyModal.nombre}</span> ({historyModal.rut})</p>
+            </div>
+            
+            {/* Tabla Placeholder para las ventas */}
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-100 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">ID Venta</th>
+                    <th className="px-4 py-2 font-medium">Fecha</th>
+                    <th className="px-4 py-2 font-medium">Total</th>
+                    <th className="px-4 py-2 font-medium">Método Pago</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan="4" className="px-4 py-8 text-center text-gray-500 italic bg-gray-50">
+                      Sin registros de compras recientes.
+                      <br />
+                      <span className="text-xs text-gray-400">(Módulo de ventas en desarrollo)</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button onClick={() => setHistoryModal(null)} className="btn-secondary px-6">Cerrar</button>
+            </div>
           </div>
         </div>
       )}
