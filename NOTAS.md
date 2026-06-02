@@ -10,3 +10,6 @@ de texto plano. Endpoints CRUD listos.
 Nacho: Finalizado el frontend. Actualicé la vista de Clientes agregando el modal para el futuro historial de compras. 
 Corregí y adapté la vista de Usuarios asegurando que la edición de roles funcione correctamente con el backend y ocultando 
 la edición de contraseñas por seguridad.
+
+Nacho: Frontend finalizado y conectado a la BD en Azure. Validaciones de RUT, encriptación de contraseñas y
+vistas de Clientes/Usuarios probadas y funcionando correctamente.
