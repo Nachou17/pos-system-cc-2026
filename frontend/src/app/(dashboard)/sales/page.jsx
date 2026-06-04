@@ -1,85 +1,158 @@
 'use client';
-import { useEffect, useState } from 'react';
-import api from '@/lib/api';
-import { formatCLP } from '@/lib/utils';
 
-export default function SalesPage() {
-  const [sales, setSales]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+import { useState, useEffect } from 'react';
+import api from '../../../lib/api'; // Ajusta los ../ según tu estructura de carpetas
 
+export default function HistorialVentas() {
+  const [ventas, setVentas] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [cargando, setCargando] = useState(true);
+
+  // Cargamos el historial apenas se abre la pantalla
   useEffect(() => {
-    const stored = localStorage.getItem('user');
-    if (stored) setIsAdmin(JSON.parse(stored).rol === 'admin');
+    const cargarHistorial = async () => {
+      try {
+        const respuesta = await api.get('/sales');
+        
+        // 🚀 LA MAGIA DE LOS DATOS DE PRUEBA
+        // Si la base de datos está vacía, inyectamos nuestras ventas falsas
+        if (respuesta.data.length === 0) {
+          setVentas([
+            { 
+              id: 1001, 
+              total: 24500, 
+              metodo_pago: 'debito', 
+              estado: 'completada', 
+              created_at: new Date().toISOString() // Hoy
+            },
+            { 
+              id: 1002, 
+              total: 3200, 
+              metodo_pago: 'efectivo', 
+              estado: 'completada', 
+              created_at: new Date(Date.now() - 86400000).toISOString() // Ayer
+            },
+            { 
+              id: 1003, 
+              total: 15990, 
+              metodo_pago: 'debito', 
+              estado: 'anulada', 
+              created_at: new Date(Date.now() - 172800000).toISOString() // Anteayer
+            }
+          ]);
+        } else {
+          // Si Joni ya logró guardar ventas reales en Azure, mostramos las de verdad
+          setVentas(respuesta.data);
+        }
+
+      } catch (error) {
+        console.error('Error al cargar las ventas:', error);
+        alert('Hubo un problema al cargar el historial.');
+      } finally {
+        setCargando(false);
+      }
+    };
+
+    cargarHistorial();
   }, []);
 
-  const load = () => {
-    setLoading(true);
-    api.get('/sales').then((r) => setSales(r.data)).catch(console.error).finally(() => setLoading(false));
+  // Función para que la fecha se vea bonita
+  const formatearFecha = (fechaISO) => {
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleDateString('es-CL') + ' ' + fecha.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
   };
 
-  useEffect(() => { load(); }, []);
-
-  const handleCancel = async (id) => {
-    if (!confirm('¿Anular esta venta? Se repondrá el stock de los productos.')) return;
-    try {
-      await api.put(`/sales/${id}/cancel`);
-      load();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Error al anular.');
-    }
-  };
+  // MAGIA DEL BUSCADOR: Filtra por N° de boleta, método de pago o estado
+  const ventasFiltradas = ventas.filter((venta) => {
+    const termino = busqueda.toLowerCase();
+    return (
+      venta.id.toString().includes(termino) ||
+      venta.metodo_pago.toLowerCase().includes(termino) ||
+      venta.estado.toLowerCase().includes(termino)
+    );
+  });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Historial de Ventas</h1>
+    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+      <h2>Historial de Ventas</h2>
+      <p style={{ color: 'gray', marginBottom: '20px' }}>
+        Aquí puedes revisar y buscar todas las transacciones realizadas en el sistema.
+      </p>
 
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="table-header">N° Venta</th>
-              <th className="table-header">Fecha</th>
-              <th className="table-header">Cliente</th>
-              <th className="table-header">Cajero</th>
-              <th className="table-header">Método Pago</th>
-              <th className="table-header">Total</th>
-              <th className="table-header">Estado</th>
-              <th className="table-header">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading && (
-              <tr><td colSpan={8} className="table-cell text-center text-gray-400 py-8">Cargando...</td></tr>
-            )}
-            {!loading && sales.length === 0 && (
-              <tr><td colSpan={8} className="table-cell text-center text-gray-400 py-8">Sin ventas registradas</td></tr>
-            )}
-            {sales.map((v) => (
-              <tr key={v.id} className="hover:bg-gray-50">
-                <td className="table-cell font-mono text-gray-600">#{v.id}</td>
-                <td className="table-cell text-sm text-gray-500">
-                  {new Date(v.created_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })}
-                </td>
-                <td className="table-cell">{v.cliente_nombre || '—'}</td>
-                <td className="table-cell text-gray-500">{v.cajero_nombre || '—'}</td>
-                <td className="table-cell capitalize">{v.metodo_pago}</td>
-                <td className="table-cell font-semibold">{formatCLP(v.total)}</td>
-                <td className="table-cell">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v.estado === 'completada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                    {v.estado}
-                  </span>
-                </td>
-                <td className="table-cell">
-                  {v.estado === 'completada' && isAdmin && (
-                    <button onClick={() => handleCancel(v.id)} className="text-red-500 hover:underline text-sm">Anular</button>
-                  )}
-                </td>
+      {/* EL BUSCADOR */}
+      <input 
+        type="text" 
+        placeholder="Buscar por N° de boleta, método de pago o estado..." 
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        style={{ 
+          width: '100%', 
+          padding: '12px', 
+          fontSize: '16px', 
+          marginBottom: '20px', 
+          border: '1px solid #ccc', 
+          borderRadius: '5px' 
+        }}
+      />
+
+      {/* LA TABLA DE RESULTADOS */}
+      {cargando ? (
+        <p>Cargando transacciones...</p>
+      ) : (
+        <div style={{ background: 'white', borderRadius: '10px', padding: '20px', border: '1px solid #ddd' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            
+            <thead>
+              <tr style={{ borderBottom: '2px solid #eee' }}>
+                <th style={{ padding: '10px' }}>N° Boleta</th>
+                <th style={{ padding: '10px' }}>Fecha y Hora</th>
+                <th style={{ padding: '10px' }}>Método de Pago</th>
+                <th style={{ padding: '10px' }}>Estado</th>
+                <th style={{ padding: '10px' }}>Total</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            
+            <tbody>
+              {ventasFiltradas.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'gray' }}>
+                    No se encontraron ventas que coincidan con tu búsqueda.
+                  </td>
+                </tr>
+              ) : (
+                ventasFiltradas.map((venta) => (
+                  <tr key={venta.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '10px' }}>#{venta.id}</td>
+                    <td style={{ padding: '10px' }}>{formatearFecha(venta.created_at)}</td>
+                    
+                    <td style={{ padding: '10px', textTransform: 'capitalize' }}>
+                      {venta.metodo_pago}
+                    </td>
+                    
+                    <td style={{ padding: '10px' }}>
+                      <span style={{ 
+                        background: venta.estado === 'completada' ? '#d4edda' : '#f8d7da',
+                        color: venta.estado === 'completada' ? '#155724' : '#721c24',
+                        padding: '5px 10px', 
+                        borderRadius: '15px',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}>
+                        {venta.estado}
+                      </span>
+                    </td>
+                    
+                    <td style={{ padding: '10px', fontWeight: 'bold' }}>
+                      ${venta.total}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            
+          </table>
+        </div>
+      )}
     </div>
   );
 }
