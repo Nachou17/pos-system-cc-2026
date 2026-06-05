@@ -5,14 +5,12 @@ const pool = require('../config/database');
 // ============================================================================
 const getAll = async (req, res) => {
   try {
-    // Hacemos la consulta directamente a la base de datos sin pedir conexión exclusiva
     const resultado = await pool.query(`
       SELECT id, total, metodo_pago, estado, created_at 
       FROM ventas 
       ORDER BY created_at DESC
     `);
     
-    // Adaptador de seguridad: por si usan Postgres (resultado.rows) o MySQL (resultado[0])
     const datos = resultado.rows ? resultado.rows : (resultado[0] || resultado);
     
     res.status(200).json(datos);
@@ -26,48 +24,70 @@ const getAll = async (req, res) => {
 // 2. FUNCIÓN PARA COBRAR (La que usa la pantalla de Punto de Venta/Caja)
 // ============================================================================
 async function crearVenta(req, res) {
-  const { usuario_id, cliente_id, total, metodo_pago, carrito } = req.body;
-  const conexion = await pool.connect();
+  // Extraemos el usuario_id del middleware de autenticación (req.user)
+  const usuario_id = req.user ? req.user.id : null;
+  // Desestructuramos las propiedades que envía el front (sin depender de 'total')
+  const { cliente_id, metodo_pago, items } = req.body;
+
+  // Validación de seguridad para evitar arreglos vacíos o inexistentes
+  if (!items || items.length === 0) {
+    return res.status(400).json({ error: 'El carrito no puede estar vacío' });
+  }
 
   try {
-    await conexion.query('BEGIN'); 
+    // 1. Calculamos el total de la venta sumando los subtotales en el servidor
+    let totalCalculado = 0;
+    for (let item of items) {
+      totalCalculado += item.cantidad * item.precio_unitario;
+    }
 
-    // Guardamos el encabezado de la boleta
-    const resultadoVenta = await conexion.query(
-      `INSERT INTO ventas (usuario_id, cliente_id, total, metodo_pago) 
-       VALUES ($1, $2, $3, $4) RETURNING id`,
-      [usuario_id, cliente_id, total, metodo_pago]
+    // Iniciamos la transacción directamente en el pool
+    await pool.query('BEGIN'); 
+
+    // Guardamos el encabezado de la boleta (con estado 'completada' por defecto y el total seguro)
+    const resultadoVenta = await pool.query(
+      `INSERT INTO ventas (usuario_id, cliente_id, total, metodo_pago, estado) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [
+        usuario_id, 
+        cliente_id ? parseInt(cliente_id) : null, 
+        totalCalculado, // <-- Número entero válido y blindado contra modificaciones
+        metodo_pago || 'efectivo',
+        'completada'
+      ]
     );
     
     const numeroBoleta = resultadoVenta.rows[0].id;
 
-    // Recorremos los productos del carrito y descontamos stock
-    for (let item of carrito) {
-      const subtotal = item.cantidad * item.precio;
+    // Recorremos los productos usando la estructura exacta que manda el cliente (items)
+    for (let item of items) {
+      // El subtotal se calcula multiplicando las propiedades correctas del front
+      const subtotal = item.cantidad * item.precio_unitario;
 
-      await conexion.query(
+      // Insertamos cada producto en el detalle utilizando el pool
+      await pool.query(
         `INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal) 
          VALUES ($1, $2, $3, $4, $5)`,
-        [numeroBoleta, item.id, item.cantidad, item.precio, subtotal]
+        [numeroBoleta, item.producto_id, item.cantidad, item.precio_unitario, subtotal]
       );
 
-      await conexion.query(
+      // Descontamos del stock usando item.producto_id directamente en el pool
+      await pool.query(
         `UPDATE productos SET stock = stock - $1 WHERE id = $2`,
-        [item.cantidad, item.id]
+        [item.cantidad, item.producto_id]
       );
     }
 
-    await conexion.query('COMMIT');
+    // Confirmamos todos los cambios si no hubo errores en el ciclo
+    await pool.query('COMMIT');
     res.status(201).json({ mensaje: '¡Venta guardada exitosamente!', boleta: numeroBoleta });
 
   } catch (error) {
-    await conexion.query('ROLLBACK');
-    console.error('Problema al guardar la venta:', error);
+    // Si algo falla, revertimos toda la operación para mantener la consistencia
+    await pool.query('ROLLBACK');
+    console.error('Problema al guardar la venta en la base de datos:', error);
     res.status(500).json({ error: 'No se pudo completar la venta' });
-  } finally {
-    if (conexion) conexion.release();
   }
 }
 
-// Exportamos ambas funciones para que tus rutas (routes/sales.js) funcionen bien
 module.exports = { crearVenta, getAll };

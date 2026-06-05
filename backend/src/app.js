@@ -17,8 +17,11 @@ const app = express();
 // ─── CORS ────────────────────────────────────────────────────────────────────
 // ⚠️ TODO: En producción restringir a dominios específicos:
 //   app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
-app.use(cors()); // Permite todos los orígenes — NO recomendado en producción
-
+// ─── CORS ────────────────────────────────────────────────────────────────────
+app.use(cors({
+  origin: ['http://20.2.83.12:3000', 'http://localhost:3000'], // Tu IP de Azure y local
+  credentials: true // <-- Esto permite que viajen los tokens/cookies de autenticación
+}));
 // ─── PARSERS ─────────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
