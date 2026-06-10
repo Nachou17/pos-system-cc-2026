@@ -95,4 +95,23 @@ const salesByPayment = async (_req, res) => {
   }
 };
 
-module.exports = { summary, salesByDay, topProducts, salesByPayment };
+/** GET /api/reports/daily-sales — Ventas detalladas del día actual */
+const dailySales = async (_req, res) => {
+  try {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const result = await pool.query(
+      `SELECT COUNT(*)::int    AS cantidad_ventas, 
+              COALESCE(SUM(total), 0)::int AS monto_total
+       FROM ventas 
+       WHERE estado = 'completada' AND created_at >= $1`,
+      [hoy]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { summary, salesByDay, topProducts, salesByPayment, dailySales };

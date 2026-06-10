@@ -1,7 +1,14 @@
 'use client';
-import { useEffect, useState } from 'react';
-import api from '@/lib/api';
-import { formatCLP } from '@/lib/utils';
+
+import React, { useEffect, useState } from 'react';
+// Importamos la herramienta de conexión que ya hicieron tus compañeros
+import api from '@/lib/api'; 
+import { formatCLP } from '@/lib/utils'; // Asumiendo que sus utilidades vienen de ahí, si no, usa el formato que tengan
+// Importamos los gráficos de Recharts para tu entrega
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell 
+} from 'recharts';
 
 function StatCard({ title, value, sub, color, icon }) {
   return (
@@ -20,28 +27,39 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [recentSales, setRecentSales] = useState([]);
+  // Tus dos nuevos estados para guardar la data de los gráficos
+  const [salesByDay, setSalesByDay] = useState([]);
+  const [salesByPayment, setSalesByPayment] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Colores bacanes para el gráfico circular de métodos de pago
+  const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'];
+
   useEffect(() => {
+    // Llamamos a todos los endpoints en paralelo (incluyendo los tuyos)
     Promise.all([
       api.get('/reports/summary'),
       api.get('/reports/top-products?limit=5'),
       api.get('/sales'),
-    ]).then(([s, tp, sales]) => {
+      api.get('/reports/sales-by-day?days=7'),       // Tu endpoint de la semana
+      api.get('/reports/sales-by-payment')           // Tu endpoint de métodos de pago
+    ]).then(([s, tp, sales, sbd, sbp]) => {
       setSummary(s.data);
       setTopProducts(tp.data);
       setRecentSales(sales.data.slice(0, 8));
+      setSalesByDay(sbd.data);                        // Guardamos tu data por día
+      setSalesByPayment(sbp.data);                    // Guardamos tu data por pago
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="text-center py-20 text-gray-400">Cargando...</div>;
+  if (loading) return <div className="text-center py-20 text-gray-400">Cargando dashboard del sistema...</div>;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
 
-      {/* KPI Cards */}
+      {/* KPI Cards (El bloque original de tus compañeros) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Ventas hoy"
@@ -71,6 +89,54 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* BLOQUE NUEVO: TUS GRÁFICOS DEL JUEVES */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Gráfico de Ventas de la Semana (Ocupa 2 columnas de ancho) */}
+        <div className="card lg:col-span-2">
+          <h2 className="font-semibold text-gray-900 mb-4">Evolución de Ventas (Últimos 7 días)</h2>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={salesByDay}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => formatCLP(value)} />
+                <Legend />
+                <Bar dataKey="monto" name="Ingresos ($)" fill="#4F46E5" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico de Métodos de Pago (Ocupa 1 columna de ancho) */}
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-4">Métodos de Pago Utilizados</h2>
+          <div className="h-64 flex justify-center items-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={salesByPayment}
+                  dataKey="monto"
+                  nameKey="metodo_pago"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={70}
+                  fill="#8884d8"
+                  label={(entry) => entry.metodo_pago}
+                >
+                  {salesByPayment.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => formatCLP(value)} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* BLOQUE INFERIOR: Tablas de datos originales */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Últimas ventas */}
         <div className="card">
@@ -79,15 +145,15 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="table-header">N°</th>
-                  <th className="table-header">Cliente</th>
-                  <th className="table-header">Total</th>
-                  <th className="table-header">Estado</th>
+                  <th className="table-header text-left">N°</th>
+                  <th className="table-header text-left">Cliente</th>
+                  <th className="table-header text-left">Total</th>
+                  <th className="table-header text-left">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {recentSales.length === 0 && (
-                  <tr><td colSpan={4} className="table-cell text-center text-gray-400">Sin ventas aún</td></tr>
+                  <tr><td colSpan={4} className="table-cell text-center text-gray-400 py-4">Sin ventas aún</td></tr>
                 )}
                 {recentSales.map((v) => (
                   <tr key={v.id} className="border-b border-gray-50 hover:bg-gray-50">
